@@ -182,6 +182,17 @@ td.r,th.r{text-align:right}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .err{color:var(--bad);font-size:13px;font-weight:600}
+.modal.wide{width:min(580px,calc(100% - 32px))}
+.facs{display:flex;flex-wrap:wrap;gap:6px}
+.fac{font-size:12.5px;font-weight:500;padding:3px 10px;border-radius:6px;background:var(--sunk)}
+.facgroup{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:10px}
+.facgroup-h{font-size:13px;font-weight:700}
+.facpick{display:flex;flex-wrap:wrap;gap:6px}
+.fchk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:5px 10px;font-size:13px;cursor:pointer;user-select:none}
+.fchk input{accent-color:var(--accent);margin:0}
+.fchk:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.addline{display:flex;gap:6px}
+.addline input{flex:1;min-width:0;border:1px dashed var(--line);background:var(--bg);border-radius:8px;padding:6px 10px;font-size:13px}
 .err:empty{display:none}
 .tb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .loc.add{border:1.5px dashed var(--line);background:none;color:var(--accent);font-weight:700;font-size:15px;align-items:center;justify-content:center;gap:4px;min-height:160px;border-radius:12px}
@@ -263,6 +274,20 @@ const ISSUES = {
   Kebersihan:['Lorong depan kamar kotor','Tempat sampah penuh'],
 };
 
+// daftar fasilitas per kategori; admin bisa menambah item & kategori sendiri
+const FAC = [
+  {cat:'Fasilitas kamar', items:['Kasur','Meja','Kursi','Lemari','Kipas angin','AC','Jendela']},
+  {cat:'Kamar mandi', items:['Kamar mandi dalam','Water heater','Shower','Wastafel']},
+  {cat:'Lainnya', items:['WiFi','TV','Balkon','Kulkas mini']},
+];
+function defaultFac(type){
+  const f = ['Kasur','Meja','Kursi','Lemari','Jendela','WiFi'];
+  if (type === 'Standar') f.push('Kipas angin');
+  else f.push('AC','Kamar mandi dalam','Shower');
+  if (type === 'VIP') f.push('Water heater','Wastafel','TV');
+  return f;
+}
+
 const rooms = [], tenants = [], invoices = [], tickets = [];
 let seq = 1;
 const phone = () => '08' + pick(['12','13','21','52','57','77','95']) + '-' + String(Math.floor(R()*9000)+1000) + '-' + String(Math.floor(R()*9000)+1000);
@@ -271,7 +296,7 @@ for (const L of LOCS) {
   for (let f = 1; f <= L.floors; f++) {
     for (let n = 1; n <= L.perFloor; n++) {
       const type = n > L.perFloor - 2 ? 'VIP' : (f === 1 && R() < .75 ? 'Standar' : (R() < .3 ? 'Standar' : 'AC'));
-      const r = { id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], status:'kosong', tenantId:null, booking:null };
+      const r = { id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], fac:defaultFac(type), status:'kosong', tenantId:null, booking:null };
       const x = R();
       if (x < .85) {
         r.status = 'terisi';
@@ -430,13 +455,13 @@ function vKamar(){
   const cnt = s => s === 'all' ? rs.length : rs.filter(r => r.status === s).length;
   const q = S.q.trim().toLowerCase();
   const match = r => (S.rstatus === 'all' || r.status === S.rstatus) &&
-    (!q || r.code.toLowerCase().includes(q) || (tenantOf(r)?.name.toLowerCase().includes(q)));
+    (!q || r.code.toLowerCase().includes(q) || tenantOf(r)?.name.toLowerCase().includes(q) || r.fac.some(f => f.toLowerCase().includes(q)));
   const locs = LOCS.filter(l => S.loc === 'all' || l.id === S.loc);
   return `
   <div class="toolbar">
     <div class="chips">${[['all','Semua'],['terisi','Terisi'],['kosong','Kosong'],['booking','Booking'],['perbaikan','Perbaikan']].map(([k, l]) =>
       `<button class="chip" data-rstatus="${k}" aria-pressed="${S.rstatus === k}">${k !== 'all' ? `<i class="dot" style="background:var(${({terisi:'--ok',kosong:'--empty',booking:'--warn',perbaikan:'--fix'})[k]})"></i>` : ''}${l}<span class="n">${cnt(k)}</span></button>`).join('')}</div>
-    <input class="search" id="q" type="search" placeholder="Cari no. kamar atau nama…" value="${esc(S.q)}">
+    <input class="search" id="q" type="search" placeholder="Cari no. kamar, nama, atau fasilitas…" value="${esc(S.q)}">
     <div class="tb-actions"><button class="btn" data-addbldg>+ Tambah gedung</button><button class="btn primary" data-addroom="">+ Tambah kamar</button></div>
   </div>
   <div class="legend"><span><i class="dot" style="background:var(--bad)"></i>Titik merah: penyewa telat bayar</span><span>Klik kamar untuk detail &amp; aksi</span></div>
@@ -534,6 +559,9 @@ function drawerHTML(r){
   } else {
     body += `<div class="box"><div class="eyebrow">Kamar kosong</div><div class="muted">Siap disewakan. Klik "Check-in penyewa" untuk mencatat penyewa baru.</div></div>`;
   }
+  const facGroups = FAC.map(g => ({ cat:g.cat, has:g.items.filter(i => r.fac.includes(i)) })).filter(g => g.has.length);
+  body += `<div class="box"><div style="display:flex;align-items:center"><div class="eyebrow">Fasilitas</div><button class="link" data-editroom="${r.id}" style="margin-left:auto">Ubah</button></div>
+    ${facGroups.length ? facGroups.map(g => `<div><div class="muted" style="font-size:12px;margin-bottom:5px">${esc(g.cat)}</div><div class="facs">${g.has.map(i => `<span class="fac">${esc(i)}</span>`).join('')}</div></div>`).join('') : '<div class="muted" style="font-size:13px">Belum ada fasilitas.</div>'}</div>`;
   body += `<div class="box"><div class="eyebrow">Riwayat perawatan</div>${rt.length ? `<ul class="list" style="margin:0 -14px">${rt.map(k => `<li><div class="who"><b>${esc(k.title)}</b><small>${k.cat} · ${dfmt(k.created)}</small></div>${pill(k.status === 'selesai' ? ['p-ok','Selesai'] : k.status === 'proses' ? ['p-fix','Dikerjakan'] : ['p-warn','Baru'])}</li>`).join('')}</ul>` : '<div class="muted" style="font-size:13px">Belum ada keluhan.</div>'}</div>`;
 
   let foot = '';
@@ -546,7 +574,7 @@ function drawerHTML(r){
   return `<aside class="drawer" role="dialog" aria-label="Detail kamar ${r.code}">
     <div class="drawer-h"><div><div class="big">${r.code}</div><div class="muted" style="margin-top:6px;font-size:13px">${L.name} · Lantai ${r.floor} · ${r.type}</div>
       <div style="margin-top:8px;display:flex;gap:8px;align-items:center">${pill(ROOM_PILL[r.status])}<span class="num" style="font-weight:600">${rp(r.price)}<span class="muted" style="font-weight:400">/bulan</span></span></div></div>
-      <button class="x" data-close aria-label="Tutup">×</button></div>
+      <div style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" data-editroom="${r.id}">Edit kamar</button><button class="x" data-close aria-label="Tutup">×</button></div></div>
     <div class="drawer-b">${body}</div>
     <div class="drawer-f">${foot}</div></aside>`;
 }
@@ -578,6 +606,23 @@ function modalHTML(){
       <div class="field"><label for="tk-prio">Prioritas</label><select id="tk-prio"><option>Rendah</option><option selected>Sedang</option><option>Tinggi</option></select></div></div>
       <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan tiket</button></div></form></div>`;
   }
+  if (m.type === 'editroom') {
+    const r = roomOf(m.roomId), dr = m.draft;
+    return `<div class="modal wide" role="dialog" aria-label="Edit kamar ${r.code}"><form id="fedit">
+      <h2>Edit kamar <span class="mono">${esc(r.code)}</span></h2>
+      <div class="muted" style="font-size:13px">${esc(locOf(r).name)} · Lantai ${r.floor}</div>
+      <div class="grid3"><div class="field"><label for="er-code">Nomor kamar</label><input id="er-code" class="mono" required maxlength="8" value="${esc(dr.code)}"></div>
+      <div class="field"><label for="er-type">Tipe</label><select id="er-type">${['Standar','AC','VIP'].map(t => `<option ${t === dr.type ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label for="er-price">Harga/bulan (Rp)</label><input id="er-price" type="number" min="0" step="50000" value="${dr.price}" required></div></div>
+      ${r.status === 'terisi' ? '<div class="note">Harga baru berlaku mulai tagihan berikutnya.</div>' : ''}
+      <div class="eyebrow" id="er-count" style="margin-top:6px">Fasilitas ·${dr.fac.length} dipilih</div>
+      ${FAC.map((g, gi) => `<div class="facgroup"><div class="facgroup-h">${esc(g.cat)}</div>
+        <div class="facpick">${g.items.map(it => `<label class="fchk"><input type="checkbox" data-fac="${esc(it)}" ${dr.fac.includes(it) ? 'checked' : ''}>${esc(it)}</label>`).join('') || '<span class="muted" style="font-size:12.5px">Belum ada item.</span>'}</div>
+        <div class="addline"><input id="nf-${gi}" data-addfac-input="${gi}" placeholder="Tambah fasilitas ${esc(g.cat.toLowerCase())}…" aria-label="Tambah fasilitas ke ${esc(g.cat)}"><button type="button" class="btn sm" data-addfac="${gi}">Tambah</button></div></div>`).join('')}
+      <div class="addline"><input id="nc" placeholder="Kategori baru, misal: Dapur" aria-label="Nama kategori baru"><button type="button" class="btn sm" data-addcat>+ Kategori</button></div>
+      <div class="err" id="er-err" role="alert"></div>
+      <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan perubahan</button></div></form></div>`;
+  }
   if (m.type === 'gedung') {
     return `<div class="modal" role="dialog" aria-label="Tambah gedung"><form id="fgedung">
       <h2>Tambah gedung</h2>
@@ -608,6 +653,26 @@ function modalHTML(){
       <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan kamar</button></div></form></div>`;
   }
   return '';
+}
+
+// fasilitas baru masuk ke daftar kategori dan langsung dicentang untuk kamar ini
+function addFac(gi){
+  const inp = $('#nf-' + gi), name = inp.value.trim().replace(/\s+/g, ' ');
+  if (!name) { inp.focus(); return; }
+  const dr = S.modal.draft, exists = FAC.flatMap(g => g.items).find(i => i.toLowerCase() === name.toLowerCase());
+  if (!exists) FAC[gi].items.push(name);
+  const item = exists || name;
+  if (!dr.fac.includes(item)) dr.fac.push(item);
+  renderLayer(); $('#nf-' + gi).focus();
+  toast(exists ? `"${item}" sudah ada di daftar, sekarang dicentang.` : `Fasilitas "${item}" ditambahkan.`);
+}
+function addCat(){
+  const inp = $('#nc'), name = inp.value.trim().replace(/\s+/g, ' ');
+  if (!name) { inp.focus(); return; }
+  if (FAC.some(g => g.cat.toLowerCase() === name.toLowerCase())) { $('#er-err').textContent = `Kategori "${name}" sudah ada.`; return; }
+  FAC.push({ cat:name, items:[] });
+  renderLayer(); $('#nf-' + (FAC.length - 1)).focus();
+  toast(`Kategori "${name}" dibuat. Tambahkan fasilitasnya.`);
 }
 
 // nomor kamar baru melanjutkan nomor terakhir di lantai tsb
@@ -667,6 +732,12 @@ document.addEventListener('click', e => {
   if (d.advance) { const k = byId(tickets, d.advance); k.status = k.status === 'baru' ? 'proses' : 'selesai'; toast(k.status === 'selesai' ? 'Tiket ditandai selesai.' : 'Tiket mulai dikerjakan.'); render(); return; }
   if (d.checkin) { S.modal = { type:'checkin', roomId:d.checkin }; renderLayer(); return; }
   if ('newticket' in d) { const r = d.newticket ? roomOf(d.newticket) : null; S.modal = { type:'ticket', roomId:r?.id, locId: r ? r.loc : (S.loc === 'all' ? LOCS[0].id : S.loc) }; renderLayer(); return; }
+  if (d.editroom) {
+    const r = roomOf(d.editroom);
+    S.modal = { type:'editroom', roomId:r.id, draft:{ code:r.code, type:r.type, price:r.price, fac:[...r.fac] } }; renderLayer(); return;
+  }
+  if ('addfac' in d) { addFac(+d.addfac); return; }
+  if ('addcat' in d) { addCat(); return; }
   if ('addbldg' in d) { S.modal = { type:'gedung' }; renderLayer(); return; }
   if ('addroom' in d) {
     const L = byId(LOCS, d.addroom || (S.loc === 'all' ? LOCS[0].id : S.loc));
@@ -690,6 +761,8 @@ document.addEventListener('input', e => {
     const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos);
   }
   if (e.target.id.startsWith('ag-')) $('#ag-preview').innerHTML = gedungPreview();
+  if (e.target.id === 'er-code') S.modal.draft.code = e.target.value;
+  if (e.target.id === 'er-price') S.modal.draft.price = e.target.value;
   if (e.target.id === 'ar-count' || e.target.id === 'ar-price') { readKamar(S.modal); $('#ar-preview').innerHTML = kamarPreview(S.modal); }
 });
 document.addEventListener('change', e => {
@@ -703,6 +776,15 @@ document.addEventListener('change', e => {
     m.price = byId(LOCS, m.locId).price[m.rtype]; renderLayer();
   }
   if (e.target.id === 'ar-floor') { readKamar(S.modal); $('#ar-preview').innerHTML = kamarPreview(S.modal); }
+  if (e.target.id === 'er-type') {
+    const dr = S.modal.draft; dr.type = e.target.value;
+    dr.price = locOf(roomOf(S.modal.roomId)).price[dr.type]; $('#er-price').value = dr.price;
+  }
+  if (e.target.dataset.fac) {
+    const dr = S.modal.draft, f = e.target.dataset.fac;
+    dr.fac = e.target.checked ? [...dr.fac, f] : dr.fac.filter(x => x !== f);
+    $('#er-count').textContent = `Fasilitas · ${dr.fac.length} dipilih`;
+  }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
@@ -720,6 +802,15 @@ document.addEventListener('submit', e => {
     tickets.push({ id:'k'+seq++, roomId:$('#tk-room').value, cat:$('#tk-cat').value, title:$('#tk-title').value.trim(), prio:$('#tk-prio').value, status:'baru', created:new Date(TODAY) });
     S.modal = null; toast('Tiket perawatan dibuat.'); render();
   }
+  if (e.target.id === 'fedit') {
+    const m = S.modal, r = roomOf(m.roomId), code = $('#er-code').value.trim().toUpperCase();
+    const dup = rooms.find(x => x !== r && x.code === code);
+    if (dup) { $('#er-err').textContent = `Nomor ${code} sudah dipakai kamar lain di ${locOf(dup).name}.`; $('#er-code').focus(); return; }
+    const old = r.code;
+    r.code = code; r.type = $('#er-type').value; r.price = +$('#er-price').value || 0;
+    r.fac = FAC.flatMap(g => g.items).filter(i => m.draft.fac.includes(i));
+    S.modal = null; toast(old === code ? `Kamar ${code} diperbarui.` : `Kamar ${old} diganti jadi ${code} dan diperbarui.`); render();
+  }
   if (e.target.id === 'fgedung') {
     const code = $('#ag-code').value.trim().toUpperCase();
     const dup = LOCS.find(l => l.code === code);
@@ -730,20 +821,22 @@ document.addEventListener('submit', e => {
     const type = $('#ag-type').value;
     LOCS.push(L);
     for (let f = 1; f <= L.floors; f++) for (let n = 1; n <= L.perFloor; n++)
-      rooms.push({ id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], status:'kosong', tenantId:null, booking:null });
+      rooms.push({ id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], fac:defaultFac(type), status:'kosong', tenantId:null, booking:null });
     S.modal = null; S.loc = L.id; S.view = 'kamar'; S.rstatus = 'all';
     toast(`${L.name} ditambahkan dengan ${L.floors * L.perFloor} kamar.`); render();
   }
   if (e.target.id === 'fkamar') {
     const m = S.modal; readKamar(m);
     const L = byId(LOCS, m.locId), nums = newNums(L.id, m.floor, clampCount(m.count));
-    nums.forEach(n => rooms.push({ id:'r'+seq++, code:roomCode(L, m.floor, n), num:n, loc:L.id, floor:m.floor, type:m.rtype, price:m.price, status:'kosong', tenantId:null, booking:null }));
+    nums.forEach(n => rooms.push({ id:'r'+seq++, code:roomCode(L, m.floor, n), num:n, loc:L.id, floor:m.floor, type:m.rtype, price:m.price, fac:defaultFac(m.rtype), status:'kosong', tenantId:null, booking:null }));
     if (m.floor > L.floors) L.floors = m.floor;
     S.modal = null; S.view = 'kamar';
     toast(`${nums.length} kamar ditambahkan ke ${L.name} lantai ${m.floor}.`); render();
   }
 });
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.dataset?.addfacInput) { e.preventDefault(); addFac(+e.target.dataset.addfacInput); return; }
+  if (e.key === 'Enter' && e.target.id === 'nc') { e.preventDefault(); addCat(); return; }
   if (e.key === 'Escape') { if (S.modal) S.modal = null; else { S.drawer = null; S.armed = null; } renderLayer(); }
 });
 

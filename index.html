@@ -180,6 +180,13 @@ td.r,th.r{text-align:right}
 .field label{font-size:12.5px;font-weight:600;color:var(--muted)}
 .field input,.field select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.err{color:var(--bad);font-size:13px;font-weight:600}
+.err:empty{display:none}
+.tb-actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.loc.add{border:1.5px dashed var(--line);background:none;color:var(--accent);font-weight:700;font-size:15px;align-items:center;justify-content:center;gap:4px;min-height:160px;border-radius:12px}
+.loc.add:hover{border-color:var(--accent);background:var(--accent-soft)}
+.loc.add small{color:var(--muted);font-weight:500;font-size:12.5px}
 .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:30;font-size:13px;font-weight:500;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
@@ -264,7 +271,7 @@ for (const L of LOCS) {
   for (let f = 1; f <= L.floors; f++) {
     for (let n = 1; n <= L.perFloor; n++) {
       const type = n > L.perFloor - 2 ? 'VIP' : (f === 1 && R() < .75 ? 'Standar' : (R() < .3 ? 'Standar' : 'AC'));
-      const r = { id:'r'+seq++, code:L.code + f + String(n).padStart(2,'0'), loc:L.id, floor:f, type, price:L.price[type], status:'kosong', tenantId:null, booking:null };
+      const r = { id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], status:'kosong', tenantId:null, booking:null };
       const x = R();
       if (x < .85) {
         r.status = 'terisi';
@@ -299,6 +306,7 @@ for (let i = 0; i < 13; i++) {
 }
 
 // ---------- Helper ----------
+function roomCode(L, f, n){ return L.code + f + String(n).padStart(2, '0'); }
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rp = n => 'Rp' + n.toLocaleString('id-ID');
@@ -346,7 +354,7 @@ function stats(locId){
   const late = inv.filter(i => invState(i) === 'telat');
   const lateSum = late.reduce((a, i) => a + i.amount, 0);
   const potential = rs.reduce((a, r) => a + r.price, 0);
-  return { ...c, occ: Math.round(c.terisi / c.total * 100), target, got, late, lateSum, potential };
+  return { ...c, occ: c.total ? Math.round(c.terisi / c.total * 100) : 0, target, got, late, lateSum, potential };
 }
 
 // ---------- Render ----------
@@ -391,14 +399,14 @@ function vRingkasan(){
 
   <section class="locs">${locs.map(l => {
     const s = stats(l.id);
-    const seg = (n, c) => `<i style="width:${n / s.total * 100}%;background:var(${c})"></i>`;
+    const seg = (n, c) => `<i style="width:${s.total ? n / s.total * 100 : 0}%;background:var(${c})"></i>`;
     return `<div class="panel loc">
-      <div class="loc-h"><div><b>${l.name}</b><div class="muted" style="font-size:12.5px">${l.area} · ${l.floors} lantai</div></div><span class="code">${l.code}</span></div>
+      <div class="loc-h"><div><b>${l.name}</b><div class="muted" style="font-size:12.5px">${l.area} · ${l.floors} lantai · ${s.total} kamar</div></div><span class="code">${l.code}</span></div>
       <div class="occ"><span class="v num">${s.occ}%</span><span class="muted">terisi</span></div>
       <div class="bar">${seg(s.terisi, '--ok')}${seg(s.booking, '--warn')}${seg(s.perbaikan, '--fix')}</div>
       <div class="legend"><span><i class="dot" style="background:var(--ok)"></i>${s.terisi} terisi</span><span><i class="dot" style="background:var(--warn)"></i>${s.booking} booking</span><span><i class="dot" style="background:var(--fix)"></i>${s.perbaikan} perbaikan</span><span><i class="dot" style="background:var(--empty)"></i>${s.kosong} kosong</span></div>
       <dl><dt>Terkumpul bulan ini</dt><dd class="num">${rp(s.got)}</dd><dt>Tunggakan</dt><dd class="num" style="color:${s.late.length ? 'var(--bad)' : 'inherit'}">${s.late.length} · ${rp(s.lateSum)}</dd><dt>Potensi jika penuh</dt><dd class="num">${rp(s.potential)}</dd></dl>
-    </div>`; }).join('')}
+    </div>`; }).join('')}${S.loc === 'all' ? '<button class="loc add" data-addbldg>+ Tambah gedung<small>Cabang kos baru beserta kamarnya</small></button>' : ''}
   </section>
 
   <section class="cols3">
@@ -429,12 +437,13 @@ function vKamar(){
     <div class="chips">${[['all','Semua'],['terisi','Terisi'],['kosong','Kosong'],['booking','Booking'],['perbaikan','Perbaikan']].map(([k, l]) =>
       `<button class="chip" data-rstatus="${k}" aria-pressed="${S.rstatus === k}">${k !== 'all' ? `<i class="dot" style="background:var(${({terisi:'--ok',kosong:'--empty',booking:'--warn',perbaikan:'--fix'})[k]})"></i>` : ''}${l}<span class="n">${cnt(k)}</span></button>`).join('')}</div>
     <input class="search" id="q" type="search" placeholder="Cari no. kamar atau nama…" value="${esc(S.q)}">
+    <div class="tb-actions"><button class="btn" data-addbldg>+ Tambah gedung</button><button class="btn primary" data-addroom="">+ Tambah kamar</button></div>
   </div>
   <div class="legend"><span><i class="dot" style="background:var(--bad)"></i>Titik merah: penyewa telat bayar</span><span>Klik kamar untuk detail &amp; aksi</span></div>
   ${locs.map(l => `<div class="panel">
-    <div class="panel-h"><h2>${l.name}</h2><span class="muted" style="font-size:12.5px">${l.area}</span></div>
+    <div class="panel-h"><h2>${l.name}</h2><span class="muted" style="font-size:12.5px">${l.area}</span><button class="btn sm" data-addroom="${l.id}" style="margin-left:auto">+ Kamar</button></div>
     ${Array.from({length:l.floors}, (_, i) => i + 1).map(f => `<div class="floor"><div class="floor-l">Lantai ${f}</div><div class="tiles">
-      ${rs.filter(r => r.loc === l.id && r.floor === f).map(r => { const t = tenantOf(r); const inv = t && invOfTenant(t);
+      ${rs.some(r => r.loc === l.id && r.floor === f) ? '' : '<span class="muted" style="font-size:12.5px;padding:8px 0">Belum ada kamar di lantai ini.</span>'}${rs.filter(r => r.loc === l.id && r.floor === f).map(r => { const t = tenantOf(r); const inv = t && invOfTenant(t);
         const label = r.status === 'terisi' ? t.name.split(' ')[0] : r.status === 'booking' ? 'Booking' : r.status === 'perbaikan' ? 'Perbaikan' : 'Kosong · ' + r.type;
         return `<button class="tile ${r.status} ${match(r) ? '' : 'dim'}" data-room="${r.id}" aria-label="Kamar ${r.code}, ${r.status}"><span class="c">${r.code}</span><span class="t">${esc(label)}</span>${inv && invState(inv) === 'telat' ? '<span class="late" title="Telat bayar"></span>' : ''}</button>`; }).join('')}
     </div></div>`).join('')}
@@ -500,8 +509,9 @@ function renderLayer(){
   if (S.drawer) h += `<div class="overlay" data-close></div>` + drawerHTML(roomOf(S.drawer));
   if (S.modal) h += `<div class="overlay" data-closemodal style="z-index:21"></div>` + modalHTML();
   $('#layer').innerHTML = h;
+  if ($('#ag-preview')) $('#ag-preview').innerHTML = gedungPreview();
   const first = $('#layer .modal input:not([type=hidden])');
-  if (first && !first.dataset.focused) { first.focus(); first.dataset.focused = 1; }
+  if (first && !S.modal.focused) { first.focus(); S.modal.focused = true; }
 }
 
 function drawerHTML(r){
@@ -568,7 +578,58 @@ function modalHTML(){
       <div class="field"><label for="tk-prio">Prioritas</label><select id="tk-prio"><option>Rendah</option><option selected>Sedang</option><option>Tinggi</option></select></div></div>
       <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan tiket</button></div></form></div>`;
   }
+  if (m.type === 'gedung') {
+    return `<div class="modal" role="dialog" aria-label="Tambah gedung"><form id="fgedung">
+      <h2>Tambah gedung</h2>
+      <div class="field"><label for="ag-name">Nama gedung</label><input id="ag-name" required placeholder="Contoh: Kos Mawar"></div>
+      <div class="grid2"><div class="field"><label for="ag-area">Alamat / area</label><input id="ag-area" required placeholder="Contoh: Sukabirus, Bandung"></div>
+      <div class="field"><label for="ag-code">Kode kamar (1–2 huruf)</label><input id="ag-code" required maxlength="2" pattern="[A-Za-z]{1,2}" placeholder="Contoh: W"></div></div>
+      <div class="grid2"><div class="field"><label for="ag-floors">Jumlah lantai</label><input id="ag-floors" type="number" min="1" max="20" value="3" required></div>
+      <div class="field"><label for="ag-per">Kamar per lantai</label><input id="ag-per" type="number" min="0" max="50" value="8" required></div></div>
+      <div class="field"><label for="ag-type">Tipe kamar yang dibuat otomatis</label><select id="ag-type"><option>Standar</option><option selected>AC</option><option>VIP</option></select></div>
+      <div class="eyebrow">Harga sewa per bulan (Rp)</div>
+      <div class="grid3"><div class="field"><label for="ag-ps">Standar</label><input id="ag-ps" type="number" min="0" step="50000" value="900000" required></div>
+      <div class="field"><label for="ag-pa">AC</label><input id="ag-pa" type="number" min="0" step="50000" value="1300000" required></div>
+      <div class="field"><label for="ag-pv">VIP</label><input id="ag-pv" type="number" min="0" step="50000" value="1800000" required></div></div>
+      <div class="note" id="ag-preview"></div>
+      <div class="err" id="ag-err" role="alert"></div>
+      <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan gedung</button></div></form></div>`;
+  }
+  if (m.type === 'kamar') {
+    const L = byId(LOCS, m.locId);
+    return `<div class="modal" role="dialog" aria-label="Tambah kamar"><form id="fkamar">
+      <h2>Tambah kamar</h2>
+      <div class="grid2"><div class="field"><label for="ar-loc">Gedung</label><select id="ar-loc">${LOCS.map(l => `<option value="${l.id}" ${l.id === L.id ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></div>
+      <div class="field"><label for="ar-floor">Lantai</label><select id="ar-floor">${Array.from({length:L.floors + 1}, (_, i) => i + 1).map(f => `<option value="${f}" ${f === m.floor ? 'selected' : ''}>Lantai ${f}${f > L.floors ? ' (baru)' : ''}</option>`).join('')}</select></div></div>
+      <div class="grid2"><div class="field"><label for="ar-type">Tipe</label><select id="ar-type">${['Standar','AC','VIP'].map(t => `<option ${t === m.rtype ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div class="field"><label for="ar-price">Harga per bulan (Rp)</label><input id="ar-price" type="number" min="0" step="50000" value="${m.price}" required></div></div>
+      <div class="field"><label for="ar-count">Jumlah kamar yang ditambah</label><input id="ar-count" type="number" min="1" max="30" value="${m.count}" required></div>
+      <div class="note" id="ar-preview">${kamarPreview(m)}</div>
+      <div class="actions"><button type="button" class="btn" data-closemodal>Batal</button><button class="btn primary">Simpan kamar</button></div></form></div>`;
+  }
   return '';
+}
+
+// nomor kamar baru melanjutkan nomor terakhir di lantai tsb
+function newNums(locId, floor, count){
+  const used = rooms.filter(r => r.loc === locId && r.floor === floor).map(r => r.num);
+  let n = used.length ? Math.max(...used) : 0;
+  return Array.from({length:count}, () => ++n);
+}
+const clampCount = v => Math.max(1, Math.min(30, Math.floor(+v) || 1));
+function kamarPreview(m){
+  const L = byId(LOCS, m.locId), codes = newNums(L.id, m.floor, clampCount(m.count)).map(n => roomCode(L, m.floor, n));
+  return `Nomor kamar baru: <b class="mono">${codes.length > 1 ? codes[0] + '–' + codes[codes.length - 1] : codes[0]}</b> (${codes.length} kamar, status kosong)`;
+}
+function readKamar(m){
+  m.locId = $('#ar-loc').value; m.floor = +$('#ar-floor').value; m.rtype = $('#ar-type').value;
+  m.price = +$('#ar-price').value || 0; m.count = $('#ar-count').value;
+}
+function gedungPreview(){
+  const code = ($('#ag-code').value.trim() || '?').toUpperCase();
+  const f = Math.max(1, +$('#ag-floors').value || 1), p = Math.max(0, +$('#ag-per').value || 0);
+  return p ? `Akan dibuat ${f * p} kamar kosong, nomor <b class="mono">${code}101</b> sampai <b class="mono">${roomCode({code}, f, p)}</b>. Kamar bisa ditambah lagi nanti.`
+    : 'Gedung dibuat tanpa kamar. Tambahkan kamar nanti lewat tombol "+ Kamar".';
 }
 
 // ---------- Interaksi ----------
@@ -606,6 +667,11 @@ document.addEventListener('click', e => {
   if (d.advance) { const k = byId(tickets, d.advance); k.status = k.status === 'baru' ? 'proses' : 'selesai'; toast(k.status === 'selesai' ? 'Tiket ditandai selesai.' : 'Tiket mulai dikerjakan.'); render(); return; }
   if (d.checkin) { S.modal = { type:'checkin', roomId:d.checkin }; renderLayer(); return; }
   if ('newticket' in d) { const r = d.newticket ? roomOf(d.newticket) : null; S.modal = { type:'ticket', roomId:r?.id, locId: r ? r.loc : (S.loc === 'all' ? LOCS[0].id : S.loc) }; renderLayer(); return; }
+  if ('addbldg' in d) { S.modal = { type:'gedung' }; renderLayer(); return; }
+  if ('addroom' in d) {
+    const L = byId(LOCS, d.addroom || (S.loc === 'all' ? LOCS[0].id : S.loc));
+    S.modal = { type:'kamar', locId:L.id, floor:1, rtype:'AC', price:L.price.AC, count:1 }; renderLayer(); return;
+  }
   if (d.setfix) { roomOf(d.setfix).status = 'perbaikan'; toast('Kamar ditandai dalam perbaikan.'); render(); return; }
   if (d.unfix) { const r = roomOf(d.unfix); r.status = 'kosong'; tickets.filter(k => k.roomId === r.id && k.status !== 'selesai').forEach(k => k.status = 'selesai'); toast(`Kamar ${r.code} siap disewakan lagi.`); render(); return; }
   if (d.cancelbook) { const r = roomOf(d.cancelbook); r.status = 'kosong'; r.booking = null; toast('Booking dibatalkan.'); render(); return; }
@@ -623,12 +689,20 @@ document.addEventListener('input', e => {
     $('#content').innerHTML = ({ kamar:vKamar, penyewa:vPenyewa })[S.view]();
     const q = $('#q'); q.focus(); q.setSelectionRange(pos, pos);
   }
+  if (e.target.id.startsWith('ag-')) $('#ag-preview').innerHTML = gedungPreview();
+  if (e.target.id === 'ar-count' || e.target.id === 'ar-price') { readKamar(S.modal); $('#ar-preview').innerHTML = kamarPreview(S.modal); }
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'tk-loc') {
     const title = $('#tk-title').value;
     S.modal = { ...S.modal, locId:e.target.value, roomId:null }; renderLayer(); $('#tk-title').value = title;
   }
+  if (e.target.id === 'ar-loc' || e.target.id === 'ar-type') {
+    const m = S.modal; readKamar(m);
+    if (e.target.id === 'ar-loc') m.floor = 1;
+    m.price = byId(LOCS, m.locId).price[m.rtype]; renderLayer();
+  }
+  if (e.target.id === 'ar-floor') { readKamar(S.modal); $('#ar-preview').innerHTML = kamarPreview(S.modal); }
 });
 document.addEventListener('submit', e => {
   e.preventDefault();
@@ -645,6 +719,28 @@ document.addEventListener('submit', e => {
   if (e.target.id === 'fticket') {
     tickets.push({ id:'k'+seq++, roomId:$('#tk-room').value, cat:$('#tk-cat').value, title:$('#tk-title').value.trim(), prio:$('#tk-prio').value, status:'baru', created:new Date(TODAY) });
     S.modal = null; toast('Tiket perawatan dibuat.'); render();
+  }
+  if (e.target.id === 'fgedung') {
+    const code = $('#ag-code').value.trim().toUpperCase();
+    const dup = LOCS.find(l => l.code === code);
+    if (dup) { $('#ag-err').textContent = `Kode "${code}" sudah dipakai ${dup.name}. Pilih huruf lain.`; $('#ag-code').focus(); return; }
+    const L = { id:'L'+seq++, code, name:$('#ag-name').value.trim(), area:$('#ag-area').value.trim(),
+      floors:Math.max(1, Math.min(20, +$('#ag-floors').value || 1)), perFloor:Math.max(0, Math.min(50, +$('#ag-per').value || 0)),
+      price:{ Standar:+$('#ag-ps').value || 0, AC:+$('#ag-pa').value || 0, VIP:+$('#ag-pv').value || 0 } };
+    const type = $('#ag-type').value;
+    LOCS.push(L);
+    for (let f = 1; f <= L.floors; f++) for (let n = 1; n <= L.perFloor; n++)
+      rooms.push({ id:'r'+seq++, code:roomCode(L, f, n), num:n, loc:L.id, floor:f, type, price:L.price[type], status:'kosong', tenantId:null, booking:null });
+    S.modal = null; S.loc = L.id; S.view = 'kamar'; S.rstatus = 'all';
+    toast(`${L.name} ditambahkan dengan ${L.floors * L.perFloor} kamar.`); render();
+  }
+  if (e.target.id === 'fkamar') {
+    const m = S.modal; readKamar(m);
+    const L = byId(LOCS, m.locId), nums = newNums(L.id, m.floor, clampCount(m.count));
+    nums.forEach(n => rooms.push({ id:'r'+seq++, code:roomCode(L, m.floor, n), num:n, loc:L.id, floor:m.floor, type:m.rtype, price:m.price, status:'kosong', tenantId:null, booking:null }));
+    if (m.floor > L.floors) L.floors = m.floor;
+    S.modal = null; S.view = 'kamar';
+    toast(`${nums.length} kamar ditambahkan ke ${L.name} lantai ${m.floor}.`); render();
   }
 });
 document.addEventListener('keydown', e => {

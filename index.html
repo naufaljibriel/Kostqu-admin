@@ -65,6 +65,11 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .seg{display:flex;background:var(--sunk);border-radius:10px;padding:3px;gap:2px;margin-left:auto;overflow-x:auto;max-width:100%}
 .seg button{border:0;background:none;padding:6px 12px;border-radius:7px;font-weight:600;font-size:13px;color:var(--muted);white-space:nowrap}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.theme{display:flex;background:var(--sunk);border-radius:10px;padding:3px;gap:2px}
+.theme button{border:0;background:none;width:34px;height:30px;border-radius:7px;color:var(--muted);display:grid;place-items:center}
+.theme button:hover{color:var(--ink)}
+.theme button[aria-pressed="true"]{background:var(--surface);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.theme svg{width:16px;height:16px}
 .content{padding-block:22px 40px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
 .note{font-size:12.5px;color:var(--muted);background:var(--sunk);border-radius:8px;padding:8px 12px}
 
@@ -209,7 +214,8 @@ td.r,th.r{text-align:right}
   .side{display:none}
   .top{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
   .top h1{font-size:21px}
-  .seg{margin-left:0;width:100%}
+  .seg{margin-left:0;width:100%;order:3}
+  .theme{margin-left:auto}
   .content{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-bottom:calc(90px + env(safe-area-inset-bottom,0px))}
   .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:8;background:var(--surface);border-top:1px solid var(--line);
     padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -242,6 +248,7 @@ td.r,th.r{text-align:right}
     <header class="top">
       <div><h1 id="title">Ringkasan</h1><div class="date">Senin, 26 Oktober 2026</div></div>
       <div class="seg" id="locseg" role="group" aria-label="Pilih lokasi"></div>
+      <div class="theme" id="themeseg" role="group" aria-label="Pilih tema"></div>
     </header>
     <main class="content" id="content"></main>
   </div>
@@ -363,7 +370,21 @@ const ICONS = {
   penyewa:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   tagihan:'<path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 1 .67V2l-1 .67L16 4l-3-2-3 2-3-2zM8 8h8M8 12h8M8 16h5"/>',
   perawatan:'<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+  system:'<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  light:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  dark:'<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
 };
+
+// ---------- Tema: ikuti sistem / terang / gelap (pilihan diingat di browser ini) ----------
+const THEMES = [['system','Ikuti sistem'],['light','Terang'],['dark','Gelap']];
+const hostTheme = document.documentElement.getAttribute('data-theme');
+let theme = 'system';
+try { theme = localStorage.getItem('kk-theme') || 'system'; } catch {}
+function applyTheme(){
+  const v = theme === 'system' ? hostTheme : theme;
+  if (v) document.documentElement.setAttribute('data-theme', v); else document.documentElement.removeAttribute('data-theme');
+}
+applyTheme();
 const VIEWS = [['ringkasan','Ringkasan'],['kamar','Kamar'],['penyewa','Penyewa'],['tagihan','Tagihan'],['perawatan','Perawatan']];
 const svg = k => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[k]}</svg>`;
 
@@ -391,6 +412,7 @@ function render(){
   $('#bnav').innerHTML = VIEWS.map(([k, l]) => `<button data-go="${k}" aria-current="${S.view === k}">${svg(k)}${l}${badge(k) ? `<span class="badge">${badge(k)}</span>` : ''}</button>`).join('');
   $('#locseg').innerHTML = [['all','Semua lokasi'], ...LOCS.map(l => [l.id, l.name.replace('Kos ', '')])]
     .map(([id, l]) => `<button data-loc="${id}" aria-pressed="${S.loc === id}">${l}</button>`).join('');
+  $('#themeseg').innerHTML = THEMES.map(([k, l]) => `<button data-theme-set="${k}" aria-pressed="${theme === k}" title="Tema: ${l}" aria-label="Tema ${l}">${svg(k)}</button>`).join('');
   $('#title').textContent = VIEWS.find(v => v[0] === S.view)[1];
   $('#content').innerHTML = ({ ringkasan:vRingkasan, kamar:vKamar, penyewa:vPenyewa, tagihan:vTagihan, perawatan:vPerawatan })[S.view]();
   renderLayer();
@@ -714,6 +736,10 @@ document.addEventListener('click', e => {
   const b = e.target.closest('button,[data-close],[data-closemodal],tr[data-room]');
   if (!b) return;
   const d = b.dataset;
+  if (d.themeSet) {
+    theme = d.themeSet; try { localStorage.setItem('kk-theme', theme); } catch {}
+    applyTheme(); render(); toast(`Tema: ${THEMES.find(t => t[0] === theme)[1]}`); return;
+  }
   if (d.go) { S.view = d.go; S.q = ''; if (d.bill) S.bill = d.bill; S.drawer = null; render(); scrollTo(0, 0); return; }
   if (d.loc) { S.loc = d.loc; render(); return; }
   if (d.rstatus) { S.rstatus = d.rstatus; render(); return; }
